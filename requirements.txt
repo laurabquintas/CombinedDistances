@@ -1,0 +1,11 @@
+numpy>=1.18.1
+pandas
+scipy
+scikit-learn
+matplotlib
+seaborn
+networkx>=2.4
+anytree
+pygraphviz>=1.5
+lifelines
+statsmodels

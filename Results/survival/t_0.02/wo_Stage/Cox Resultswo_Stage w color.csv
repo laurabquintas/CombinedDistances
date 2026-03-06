@@ -1,0 +1,24 @@
+,Number of Clusters,WSS,AIC,,C-Index
+Only Clinical,,,389.8,,0.663
+DISC_union,3,0.05,393.4,,0.658
+DISC_intersection,14,0.68,395.4,,0.463
+CASet_intersection,4,0.13,392.3,,0.637
+CASet_union,3,0.03,393.5,,0.652
+BD,3,0.1,392.4,,0.584
+1BD,3,0.09,380.4,,0.649
+2BD,3,0.07,393,,0.677
+AD,3,0.05,385.8,,0.607
+CD,3,0.06,391.1,,0.622
+PD,8,0.4,397,,0.546
+PCD,3,0.06,391.3,,0.656
+MLTD,3,0.08,391.4,,0.628
+MP3_union,3,0.02,391.7,,0.631
+MP3_sigmoid,3,0.03,390.9,,0.637
+MP3_intersection,3,0.12,392.7,,0.662
+MP3_geometric,3,0.03,390.1,,0.636
+CASet_geometric,7,0.18,386.7,,0.531
+CASet_sigmoid,3,0.06,387.4,,0.567
+DISC_geometric,14,0.62,395.5,,0.481
+DISC_sigmoid,3,0.08,391.2,,0.628
+Optimal Combination,4,0.13,379.7,,0.668
+Group Lasso,,,380.62,,0.638
