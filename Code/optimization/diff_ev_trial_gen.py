@@ -23,12 +23,12 @@ import sys
 from anytree.exporter import JsonExporter, DictExporter
 from anytree import Node, RenderTree, PreOrderIter
 
-current_directory = os.getcwd()
+repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-with open(current_directory + "/AML/tree_map.pickle", "rb") as f:
+with open(os.path.join(repo_root, "tree_map.pickle"), "rb") as f:
     tree_map = pickle.load(f)
 
-clinical_data = pd.read_csv(current_directory + "/AML/GEN/Results/survival/t = 0.02/clinicaldata_wclusterlabels.csv", sep = ',')
+clinical_data = pd.read_csv(os.path.join(repo_root, "Results", "survival", "t_0.02", "clinicaldata_wclusterlabels.csv"), sep=',')
 
 metric = 'DISC_intersection'
 
@@ -109,7 +109,7 @@ for cluster in list(df[metric].unique()):
         
 
 #export the output to text .txt file
-with open(current_directory + "/AML/Results/survival/t = 0.02/cluster_analysis_AML_DISCint.json", "w") as f:
+with open(os.path.join(repo_root, "Results", "survival", "t_0.02", "cluster_analysis_AML_DISCint.json"), "w") as f:
     f.write('sample_map=' + str(output))
 
 

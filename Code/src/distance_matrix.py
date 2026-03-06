@@ -90,11 +90,11 @@ def save_distance_matrix(matrix: List[List[float]], patient_ids: List[str], outp
 
 
 if __name__ == '__main__':
-    current_directory = os.getcwd()
-    tree_map = load_tree_map(os.path.join(current_directory, "AML", "tree_map.pickle"))
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tree_map = load_tree_map(os.path.join(repo_root, "tree_map.pickle"))
 
     for method in ALL_METHODS:
         matrix = compute_distance_matrix(tree_map, method)
         patient_ids = list(tree_map.keys())
-        output_path = os.path.join(current_directory, "AML", "Matrix Output", f"AML_{method}.csv")
+        output_path = os.path.join(repo_root, "Results", "distance_matrices", f"AML_{method}.csv")
         save_distance_matrix(matrix, patient_ids, output_path)

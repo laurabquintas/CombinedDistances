@@ -40,28 +40,46 @@ Metric combinations are optimized using **differential evolution** and weighted 
 CombinedDistances/
 ├── README.md
 ├── requirements.txt
+├── .gitignore
 ├── Code/
-│   ├── distance_wrapper.py      # Unified interface to all 16 distance metrics
-│   ├── distance_matrix.py       # Pairwise distance matrix computation
-│   ├── diff_ev_trial_gen.py     # Cluster visualization and export
-│   ├── utils_survival.py        # Survival analysis utilities (silhouette, clustering)
-│   ├── utils_evaluation.py      # Evaluation and plotting functions
-│   ├── utils_clustering.py      # Clustering utilities
-│   ├── tree.py                  # Tree data structures
-│   ├── dot_convert.py           # DOT format converter
-│   ├── mltd_convert.py          # MLTD format converter
-│   ├── newick_convert.py        # Newick format converter
-│   ├── read_json.py             # JSON tree reader
-│   ├── diff_final.sh            # Differential evolution runner
-│   ├── Survival_R.R             # Group LASSO survival models (R)
-│   ├── AML_final_results.ipynb                      # AML results notebook
-│   ├── Individual_survival_pipeline_aml_gen.ipynb    # AML survival pipeline
-│   └── Metrics/                 # Distance metric implementations
-│       ├── BD/                  # Bourque Distance
-│       ├── CASetDISC/           # CASet and DISC
-│       ├── GraPhyC/             # PD, PCD, AD, CD
-│       ├── MLTD/                # Multi-Labeled Tree Distance
-│       └── MP3/                 # MP3 Tree Similarity
+│   ├── src/                        # Core pipeline modules
+│   │   ├── distance_wrapper.py     # Unified interface to all 16 distance metrics
+│   │   ├── distance_matrix.py      # Pairwise distance matrix computation
+│   │   ├── tree.py                 # Tree data structures
+│   │   ├── read_json.py            # JSON tree reader
+│   │   ├── utils_survival.py       # Survival analysis utilities
+│   │   ├── utils_evaluation.py     # Evaluation and plotting functions
+│   │   └── utils_clustering.py     # Clustering and visualization utilities
+│   ├── notebooks/                  # Jupyter analysis notebooks
+│   │   ├── AML_final_results.ipynb                   # AML results notebook
+│   │   └── Individual_survival_pipeline_aml_gen.ipynb # AML survival pipeline
+│   ├── converters/                 # Tree format converters
+│   │   ├── dot_convert.py          # DOT format converter
+│   │   ├── mltd_convert.py         # MLTD format converter
+│   │   └── newick_convert.py       # Newick format converter
+│   ├── optimization/               # Differential evolution & R scripts
+│   │   ├── diff_ev_trial_gen.py    # Cluster visualization and export
+│   │   ├── diff_final.sh           # SLURM job submission script
+│   │   └── Survival_R.R            # Group LASSO survival models (R)
+│   └── metrics/                    # Distance metric implementations
+│       ├── BD/                     # Bourque Distance
+│       ├── CASetDISC/              # CASet and DISC
+│       ├── GraPhyC/                # PD, PCD, AD, CD
+│       ├── MLTD/                   # Multi-Labeled Tree Distance
+│       └── MP3/                    # MP3 Tree Similarity
+├── Results/
+│   ├── distance_matrices/          # Pairwise distance CSVs (21 metrics)
+│   ├── clustermap/                 # Clustermap heatmaps
+│   ├── clustermap_clinical/        # Clustermaps with clinical annotation
+│   ├── histograms/                 # Distance distribution histograms
+│   ├── silhouette_plot/            # Silhouette score plots
+│   ├── wss_plot/                   # Within-cluster sum of squares plots
+│   ├── diff_evolution/             # Differential evolution outputs
+│   └── survival/                   # Survival analysis results
+│       ├── t_0.01/                 # Threshold = 0.01
+│       ├── t_0.02/                 # Threshold = 0.02 (main results)
+│       ├── t_0.03/                 # Threshold = 0.03
+│       └── t_0.04/                 # Threshold = 0.04
 └── Documents/
     ├── MScThesisLauraQuintas.pdf
     └── Extended_Abstract_LauraQuintas.pdf
@@ -75,7 +93,7 @@ pip install -r requirements.txt
 
 The R survival analysis (`Survival_R.R`) additionally requires: `survival`, `survminer`, `glmnet`, `grpreg`, `penalized`, `gglasso`.
 
-The main analysis workflows are in the Jupyter notebooks under `Code/`. Start with `AML_final_results.ipynb` for the full AML analysis, or `Individual_survival_pipeline_aml_gen.ipynb` for the step-by-step survival pipeline.
+The main analysis workflows are in the Jupyter notebooks under `Code/notebooks/`. Start with `AML_final_results.ipynb` for the full AML analysis, or `Individual_survival_pipeline_aml_gen.ipynb` for the step-by-step survival pipeline.
 
 ### Documents
 

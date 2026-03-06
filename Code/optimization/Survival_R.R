@@ -11,9 +11,12 @@ library(ggplot2)
 
 ################# Load Data ######################
 
-df <- read.csv("/Users/Lau/Documents/GitHub/Combined-Distances/AML/GEN/Results/survival/t = 0.02/clinicaldata_train.csv")
+# Paths relative to repo root — set working directory to repo root before running
+results_dir <- "Results/survival/t_0.02"
 
-df_encode <- read.csv("/Users/Lau/Documents/GitHub/Combined-Distances/AML/GEN/Results/survival/t = 0.02/clinicaldata_train_HE.csv")
+df <- read.csv(file.path(results_dir, "clinicaldata_train.csv"))
+
+df_encode <- read.csv(file.path(results_dir, "clinicaldata_train_HE.csv"))
 
 
 
@@ -40,7 +43,7 @@ plot(cvfit$fit)
 plot(cvfit, type="rsq")
 
 fit <- grpsurv(df_encode, y, group_factor, penalty = 'grLasso', returnY = TRUE)
-pdf(file = "/Users/Lau/Documents/GitHub/Combined-Distances/AML/GEN/Results/survival/t = 0.02/GL_coef_lambda.pdf", width = 6, height = 6)
+pdf(file = file.path(results_dir, "GL_coef_lambda.pdf"), width = 6, height = 6)
 
 plot(fit)
 dev.off()
@@ -69,7 +72,7 @@ p <- ggplot(df, aes(x = lambda, y = AIC)) +
   labs(x = "Lambda",
        y = "AIC") +
   theme_minimal()
-ggsave(filename = "/Users/Lau/Documents/GitHub/Combined-Distances/AML/GEN/Results/survival/t = 0.02/GL_AIC_lambda.png", plot = p, width = 10, height = 6, dpi = 300)
+ggsave(filename = file.path(results_dir, "GL_AIC_lambda.png"), plot = p, width = 10, height = 6, dpi = 300)
 
 # Display the plot
 print(p)
@@ -88,15 +91,15 @@ print(loglikelihood)
 
 
 data_to_plot <- data.frame(Coefficients = min_coef, Names = attr(min_coef, "names"))
-p <- ggplot(data_to_plot, aes(x=Names, y=Coefficients)) + 
-  geom_point() + 
+p <- ggplot(data_to_plot, aes(x=Names, y=Coefficients)) +
+  geom_point() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
-ggsave(filename = "/Users/Lau/Documents/GitHub/Combined-Distances/AML/GEN/Results/survival/t = 0.02/GL_coef_.png", plot = p, width = 20, height = 6, dpi = 300)
+ggsave(filename = file.path(results_dir, "GL_coef_.png"), plot = p, width = 20, height = 6, dpi = 300)
 
 print(p)
 # Save AIC coefficients as a CSV file
-write.csv(data_to_plot, file = "/Users/Lau/Documents/GitHub/Combined-Distances/AML/GEN/Results/survival/t = 0.02/R_coef.csv", row.names = FALSE)
+write.csv(data_to_plot, file = file.path(results_dir, "R_coef.csv"), row.names = FALSE)
 
 
 
@@ -113,7 +116,7 @@ plot(cvfit, type="rsq")
 
 
 fit <- grpsurv(df_encode, y, group_factor, penalty = 'grLasso', returnY = TRUE)
-pdf(file = "/Users/Lau/Documents/GitHub/Combined-Distances/BREAST CANCER/GEN/Results/WARD/Survival/Simple LOESS/t = 0.02/GL_coef_lambda.pdf", width = 6, height = 6)
+pdf(file = file.path(results_dir, "GL_coef_lambda.pdf"), width = 6, height = 6)
 
 plot(fit)
 dev.off()
@@ -129,35 +132,35 @@ for(i in 1:5){
   # Get the indices for the train and test sets
   train_indices <- setdiff(1:nrow(df_encode), folds[[i]])
   test_indices <- folds[[i]]
-  
+
   # Subset the data
   train_data <- df_encode[train_indices, ]
   test_data <- df_encode[test_indices, ]
-  
+
   # Subset the target variable
   train_y <- y[train_indices]
   test_y <- y[test_indices]
-  
+
   # Fit the model on the training data
   fit <- grpsurv(train_data, train_y, group_factor, penalty = 'grLasso', returnY = TRUE)
-  
+
   # Evaluate the model on the test data
   # (You'll need to replace this with the appropriate function to evaluate your model,
   # which might involve predicting the survival on the test data and comparing it to the actual survival.)
   # result <- evaluate_model(fit, test_data, test_y)
-  
+
   min_coef <- coef(fit,lambda=minlambda)
   data_to_plot <- data.frame(Coefficients = min_coef, Names = attr(min_coef, "names"))
-  p <- ggplot(data_to_plot, aes(x=Names, y=Coefficients)) + 
-    geom_point() + 
+  p <- ggplot(data_to_plot, aes(x=Names, y=Coefficients)) +
+    geom_point() +
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
-  
-  
-  #ggsave(filename = "/Users/Lau/Documents/GitHub/Combined-Distances/BREAST CANCER/GEN/Results/WARD/Survival/Simple LOESS/t = 0.02/GL_AIC_lambda.png", plot = p, width = 10, height = 6, dpi = 300)
-  
+
+
+  #ggsave(filename = file.path(results_dir, "GL_AIC_lambda.png"), plot = p, width = 10, height = 6, dpi = 300)
+
   # Display the plot
   print(p)
-  
+
   # Store the result
   results[[i]] <- min_coef
 }
@@ -185,7 +188,7 @@ p <- ggplot(df, aes(x = lambda, y = AIC)) +
   labs(x = "Lambda",
        y = "AIC") +
   theme_minimal()
-ggsave(filename = "/Users/Lau/Documents/GitHub/Combined-Distances/BREAST CANCER/GEN/Results/WARD/Survival/Simple LOESS/t = 0.02/GL_AIC_lambda.png", plot = p, width = 10, height = 6, dpi = 300)
+ggsave(filename = file.path(results_dir, "GL_AIC_lambda.png"), plot = p, width = 10, height = 6, dpi = 300)
 
 # Display the plot
 print(p)
@@ -193,26 +196,26 @@ print(p)
 
 
 data_to_plot <- data.frame(Coefficients = min_coef, Names = attr(min_coef, "names"))
-p <- ggplot(data_to_plot, aes(x=Names, y=Coefficients)) + 
-  geom_point() + 
+p <- ggplot(data_to_plot, aes(x=Names, y=Coefficients)) +
+  geom_point() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
-ggsave(filename = "/Users/Lau/Documents/GitHub/Combined-Distances/BREAST CANCER/GEN/Results/WARD/Survival/Simple LOESS/t = 0.02/GL_coef_AIC.png", plot = p, width = 20, height = 6, dpi = 300)
+ggsave(filename = file.path(results_dir, "GL_coef_AIC.png"), plot = p, width = 20, height = 6, dpi = 300)
 
 print(p)
 # Save AIC coefficients as a CSV file
-write.csv(data_to_plot, file = "/Users/Lau/Documents/GitHub/Combined-Distances/BREAST CANCER/GEN/Results/WARD/Survival/Simple LOESS/t = 0.02/R_coef.csv", row.names = FALSE)
+write.csv(data_to_plot, file = file.path(results_dir, "R_coef.csv"), row.names = FALSE)
 
 # Filter to only include nonzero coefficients
 
 data_to_plot_nonzero <- data_to_plot[data_to_plot$Coefficients != 0, ]
 
 # Now, plot using ggplot
-p <- ggplot(data_to_plot_nonzero, aes(x=Names, y=Coefficients)) + 
-  geom_point() + 
+p <- ggplot(data_to_plot_nonzero, aes(x=Names, y=Coefficients)) +
+  geom_point() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
-ggsave(filename = "/Users/Lau/Documents/GitHub/Combined-Distances/AML/GEN/Results/survival/t = 0.02/GL_coef_AIC_filtered.png", plot = p, width = 8, height = 4, dpi = 300)
+ggsave(filename = file.path(results_dir, "GL_coef_AIC_filtered.png"), plot = p, width = 8, height = 4, dpi = 300)
 
 print(p)
 
@@ -231,7 +234,7 @@ plot(cvfit)
 summary(cvfit)
 
 fit <- grpsurv(df_encode_2, y, group_factor, penalty = 'grLasso', returnY = TRUE)
-pdf(file = "/Users/Lau/Documents/GitHub/Combined-Distances/AML/Results/survival/t = 0.02/GL_coef_lambda_newmethods.pdf", width = 6, height = 6)
+pdf(file = file.path(results_dir, "GL_coef_lambda_newmethods.pdf"), width = 6, height = 6)
 
 plot(fit)
 
@@ -258,19 +261,19 @@ p <- ggplot(df, aes(x = lambda, y = AIC)) +
   labs(x = "Lambda",
        y = "AIC") +
   theme_minimal()
-ggsave(filename = "/Users/Lau/Documents/GitHub/Combined-Distances/AML/Results/survival/t = 0.02/GL_AIC_lambda_newmethods.png", plot = p, width = 10, height = 6, dpi = 300)
+ggsave(filename = file.path(results_dir, "GL_AIC_lambda_newmethods.png"), plot = p, width = 10, height = 6, dpi = 300)
 
 # Display the plot
 print(p)
 
 
 data_to_plot <- data.frame(Coefficients = AIC_coef, Names = attr(AIC_coef, "names"))
-p <- ggplot(data_to_plot, aes(x=Names, y=Coefficients)) + 
-  geom_point() + 
+p <- ggplot(data_to_plot, aes(x=Names, y=Coefficients)) +
+  geom_point() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
-ggsave(filename = "/Users/Lau/Documents/GitHub/Combined-Distances/AML/Results/survival/t = 0.02/GL_coef_AIC_newmethods.png", plot = p, width = 20, height = 6, dpi = 300)
+ggsave(filename = file.path(results_dir, "GL_coef_AIC_newmethods.png"), plot = p, width = 20, height = 6, dpi = 300)
 
 print(p)
 # Save AIC coefficients as a CSV file
-write.csv(data_to_plot, file = "/Users/Lau/Documents/GitHub/Combined-Distances/AML/Results/survival/t = 0.02/R_aic_coef_newmethods.csv", row.names = FALSE)
+write.csv(data_to_plot, file = file.path(results_dir, "R_aic_coef_newmethods.csv"), row.names = FALSE)
