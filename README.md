@@ -80,4 +80,4 @@ The main analysis workflows are in the Jupyter notebooks under `Code/`. Start wi
 ### Documents
 
 - [**MSc Thesis**](Documents/MScThesisLauraQuintas.pdf) — full thesis document
-- [**Extended Abstract**](Documents/Extended_Abstract_LauraQuintas.pdf) — conference abstract
+- [**Extended Abstract**](Documents/Extended_Abstract_LauraQuintas.pdf) — thesis abstract

@@ -1,74 +1,91 @@
+"""Path Distance (PD) metric for comparing mutation trees.
+
+Computes the normalized difference in shortest-path distances between
+all pairs of shared nodes in two trees. Trees are read from DOT files
+and converted to NetworkX graphs.
+
+Each pairwise distance difference is normalized by the maximum distance
+observed for that pair minus 1 (to account for the minimum possible
+distance of 1 in a connected tree).
+"""
+
+from typing import Dict, Set, Tuple
 
 import networkx as nx
 
-# in the wrapper file we need to verify if they have at least 2 muations in common, if not distance equals 1 - done
+
+def dot_to_graph(dotfile: str) -> nx.Graph:
+    """Read a DOT file and return an undirected NetworkX graph.
+
+    Args:
+        dotfile: Path to the .gv (GraphViz DOT) file.
+
+    Returns:
+        Undirected graph parsed from the DOT file.
+    """
+    return nx.Graph(nx.nx_pydot.read_dot(dotfile))
 
 
-# came up with the strategy to normalize by dividing by the max distance between two nodes for each comparison - confirm with Xiang and Monica
+def all_pairs_distances(graph: nx.Graph) -> Dict:
+    """Compute shortest path lengths between all pairs of nodes.
+
+    Args:
+        graph: An undirected NetworkX graph.
+
+    Returns:
+        Nested dict: distances[node1][node2] = shortest_path_length.
+    """
+    return dict(nx.all_pairs_shortest_path_length(graph))
 
 
-#transform dot file to graph with networkx
-def dot2graph(dotfile):
-    """Reads a dot file and returns a graph"""
-    import networkx as nx
-    G = nx.Graph(nx.nx_pydot.read_dot(dotfile))
-    return G
+def PD(file1: str, file2: str) -> float:
+    """Compute the Path Distance between two trees given as DOT files.
 
+    For each pair of nodes present in both trees, computes the normalized
+    absolute difference in shortest-path distances.
 
-#calculate the shortest path between two nodes
-def all_pairs(G):
-    """Calculates the shortest path between two nodes"""
-    return dict(nx.all_pairs_shortest_path_length(G))
+    Args:
+        file1: Path to the first DOT file.
+        file2: Path to the second DOT file.
 
+    Returns:
+        Average normalized path distance across all compared node pairs.
+    """
+    graph1 = dot_to_graph(file1)
+    graph2 = dot_to_graph(file2)
 
-#calculate the absolute difference between two graphs
-def PD(file1, file2):
-    """Calculates the absolute difference between two graphs"""
-    
-    G1 = dot2graph(file1)
-    G2 = dot2graph(file2)
+    distances1 = all_pairs_distances(graph1)
+    distances2 = all_pairs_distances(graph2)
 
-    graph1 = all_pairs(G1)
-    graph2 = all_pairs(G2)
-    difference = 0
-    seen_pairs = set()
-    compared = 0
+    total_difference = 0.0
+    num_compared = 0
+    seen_pairs: Set[Tuple] = set()
 
-    distances = []
-    
-    # order the nodes in a tuple
-    def order(node1, node2):
-        if node1 < node2:
-            return (node1, node2)
-        else:
-            return (node2, node1)
+    for node_a in distances1:
+        for node_b in distances1[node_a]:
+            if node_a == node_b:
+                continue
 
-    for key in graph1.keys():
-        for value in graph1[key].keys():
-            
-            if key!=value and order(key,value) not in seen_pairs:
+            pair = (min(node_a, node_b), max(node_a, node_b))
+            if pair in seen_pairs:
+                continue
 
-            
-                
-                if key in graph2 and value in graph2[key]:
-                    div = ( max(graph1[key][value], graph2[key][value]) - 1 )
-                    if div == 0:
-                        div = 1
-                    difference += abs(graph1[key][value] - graph2[key][value]) / div
-                    compared +=1
+            # Find the matching distance in graph2 (check both orderings)
+            dist1 = distances1[node_a][node_b]
+            dist2 = None
 
+            if node_a in distances2 and node_b in distances2.get(node_a, {}):
+                dist2 = distances2[node_a][node_b]
+            elif node_b in distances2 and node_a in distances2.get(node_b, {}):
+                dist2 = distances2[node_b][node_a]
 
-                elif value in graph2 and key in graph2[value]:
-                    div = ( max(graph1[key][value], graph2[value][key]) - 1 )
-                    if div == 0:
-                        div = 1
-                    difference += abs(graph1[key][value] - graph2[value][key]) / div
-                    compared +=1
+            if dist2 is not None:
+                # Normalize by max distance - 1 (minimum connected distance is 1)
+                max_dist = max(dist1, dist2)
+                normalizer = max_dist - 1 if max_dist > 1 else 1
+                total_difference += abs(dist1 - dist2) / normalizer
+                num_compared += 1
 
-            seen_pairs.add(order(key,value))
-    
-    return difference / compared
+            seen_pairs.add(pair)
 
-
-
-
+    return total_difference / num_compared

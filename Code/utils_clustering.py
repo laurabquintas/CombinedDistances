@@ -1,173 +1,241 @@
+"""Visualization utilities for hierarchical clustering results.
 
-import os
-import pandas as pd
+Provides functions for generating histograms, cluster maps, and annotated
+heatmaps with clinical data overlays using seaborn and matplotlib.
+"""
+
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import silhouette_score
-from matplotlib import colors as colors
-from sklearn.metrics import silhouette_score
 from scipy.cluster.hierarchy import linkage, cut_tree
+from sklearn.metrics import silhouette_score
 import scipy.spatial as sp
 
 
+# ---------------------------------------------------------------------------
+# Distance distribution
+# ---------------------------------------------------------------------------
 
+def histograms(distance_matrix: np.ndarray, output_path: str, method: str) -> None:
+    """Plot a histogram of pairwise distances (upper triangle only).
 
-def histograms(data, output_directory, method):
-    bins = np.arange(0, 1.1, 0.05)
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        output_path: File path to save the plot.
+        method: Name of the distance metric (used in the plot title).
+    """
+    bin_edges = np.arange(0, 1.1, 0.05)
 
-    # Get the upper triangle of the distance matrix
     upper_triangle = []
-    for i in range(len(data)):
-        for j in range(i+1, len(data)):
-            upper_triangle.append(data[i,j])
+    for i in range(len(distance_matrix)):
+        for j in range(i + 1, len(distance_matrix)):
+            upper_triangle.append(distance_matrix[i, j])
 
-    # Flatten the distance matrix into a 1D array
-    #distances = data.flatten()
-
-    # Plot the histogram
-    plt.figure(figsize=(10,10))
-    plt.hist(upper_triangle, bins=bins)
+    plt.figure(figsize=(10, 10))
+    plt.hist(upper_triangle, bins=bin_edges)
     plt.xlabel('Distance')
     plt.ylabel('Frequency')
     plt.title(f'Histogram of {method}')
-
-    # Save the histogram
-    plt.savefig(output_directory,dpi=200, transparent=True)
-
-    # Clear the plot
+    plt.savefig(output_path, dpi=200, transparent=True)
     plt.clf()
 
 
-def cluster_map(method, link, data, output_directory):
-    data2 = sp.distance.squareform(data)
-        
-    #linkage
-    linkage1 = linkage(data2, method=link)
-    #clustermap
-    cluster = sns.clustermap(data, cmap = "mako_r", cbar_pos=(1.1, .2, .03, .4), row_linkage=linkage1, col_linkage=linkage1)
-    
-        
-    #save the clustermap
-    cluster.fig.suptitle(f'Cluster Map of {method} with {link} linkage method')
-    cluster.savefig(output_directory,dpi= 300, transparent=True)
+# ---------------------------------------------------------------------------
+# Cluster maps
+# ---------------------------------------------------------------------------
+
+CBAR_POSITION = (1.1, 0.2, 0.03, 0.4)
 
 
-def clustermap_wClinical(data, method, clinical_data, link, output_directory):
-    clinical_cols = ['Overall_Tumor_Grade', 'Vital_Status', 'Receptor_Status_Patient', 'Metastatic_Dz', 'Stage']
-    types = ['Spectral', 'Set2', 'hls', 'muted', 'Set2']
+def cluster_map(method: str, linkage_method: str, distance_matrix: np.ndarray,
+                output_path: str) -> None:
+    """Generate and save a seaborn clustermap heatmap.
+
+    Args:
+        method: Name of the distance metric (used in the plot title).
+        linkage_method: Hierarchical clustering linkage method (e.g., 'ward').
+        distance_matrix: Symmetric pairwise distance matrix.
+        output_path: File path to save the plot.
+    """
+    condensed = sp.distance.squareform(distance_matrix)
+    linkage_result = linkage(condensed, method=linkage_method)
+    cluster = sns.clustermap(
+        distance_matrix, cmap="mako_r", cbar_pos=CBAR_POSITION,
+        row_linkage=linkage_result, col_linkage=linkage_result,
+    )
+    cluster.fig.suptitle(f'Cluster Map of {method} with {linkage_method} linkage')
+    cluster.savefig(output_path, dpi=300, transparent=True)
+
+
+def _build_clinical_color_df(clinical_data: pd.DataFrame,
+                             clinical_cols: List[str],
+                             palette_types: List[str]) -> Tuple[pd.DataFrame, Dict]:
+    """Build a color-coded DataFrame for clinical annotation.
+
+    Args:
+        clinical_data: DataFrame with clinical columns.
+        clinical_cols: Column names to annotate.
+        palette_types: Seaborn palette names for each column.
+
+    Returns:
+        Tuple of (color DataFrame for row_colors, {col: {value: color}} lookup).
+    """
     color_dict = {}
+    lookup = {}
+    for col_name, palette in zip(clinical_cols, palette_types):
+        column = clinical_data[col_name]
+        palette_colors = sns.color_palette(palette, n_colors=len(column.unique()))
+        value_to_color = dict(zip(column.unique(), palette_colors))
+        color_dict[col_name] = column.map(value_to_color)
+        lookup[col_name] = value_to_color
+
+    return pd.DataFrame(color_dict), lookup
 
 
-    color_dict = {}
-    for (i,j) in zip(clinical_cols,types ):
-        d = clinical_data[i]
-        color = sns.color_palette(j, n_colors=len(d.unique()))
-        lut = dict(zip(d.unique(), color))
-        row_color = d.map(lut)
-        color_dict[i] = row_color
+def clustermap_with_clinical(distance_matrix: np.ndarray, method: str,
+                             clinical_data: pd.DataFrame, linkage_method: str,
+                             output_path: str,
+                             clinical_cols: Optional[List[str]] = None,
+                             palette_types: Optional[List[str]] = None) -> None:
+    """Generate a clustermap annotated with clinical data color bars.
 
-    color_df = pd.DataFrame(color_dict)
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        method: Name of the distance metric (used in the plot title).
+        clinical_data: DataFrame with clinical columns.
+        linkage_method: Hierarchical clustering linkage method.
+        output_path: File path to save the plot.
+        clinical_cols: Column names to use for annotation. Defaults to breast cancer columns.
+        palette_types: Seaborn palette names. Must match length of clinical_cols.
+    """
+    if clinical_cols is None:
+        clinical_cols = ['Overall_Tumor_Grade', 'Vital_Status', 'Receptor_Status_Patient',
+                         'Metastatic_Dz', 'Stage']
+    if palette_types is None:
+        palette_types = ['Spectral', 'Set2', 'hls', 'muted', 'Set2']
 
-    linkage1 = linkage(sp.distance.squareform(data), method=link)
-    g = sns.clustermap(data, cmap='mako_r',cbar_pos=(1.1, .2, .03, .4), row_colors=color_df, row_linkage=linkage1, col_linkage=linkage1)
+    color_df, _ = _build_clinical_color_df(clinical_data, clinical_cols, palette_types)
+    linkage_result = linkage(sp.distance.squareform(distance_matrix), method=linkage_method)
 
-    g.fig.suptitle(f'Cluster Map with Clinical Data of {method} with {link} linkage method')
-    g.savefig(output_directory,dpi= 300, transparent=True)
+    cluster = sns.clustermap(
+        distance_matrix, cmap='mako_r', cbar_pos=CBAR_POSITION,
+        row_colors=color_df, row_linkage=linkage_result, col_linkage=linkage_result,
+    )
+    cluster.fig.suptitle(f'Cluster Map with Clinical Data of {method} with {linkage_method} linkage')
+    cluster.savefig(output_path, dpi=300, transparent=True)
 
 
+def clustermap_with_clinical_legend(distance_matrix: np.ndarray, method: str,
+                                    clinical_data: pd.DataFrame, linkage_method: str,
+                                    output_path: str,
+                                    clinical_cols: Optional[List[str]] = None,
+                                    palette_types: Optional[List[str]] = None) -> None:
+    """Generate a clustermap with clinical annotation and separate legends.
+
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        method: Name of the distance metric (used in the plot title).
+        clinical_data: DataFrame with clinical columns.
+        linkage_method: Hierarchical clustering linkage method.
+        output_path: File path to save the plot.
+        clinical_cols: Column names for annotation. Defaults to AML columns.
+        palette_types: Seaborn palette names.
+    """
+    if clinical_cols is None:
+        clinical_cols = ['PriorMalig', 'Diagnosis', 'Gender', 'Tx_group', 'VitalStatus']
+    if palette_types is None:
+        palette_types = ['Spectral', 'Set2', 'hls', 'muted', 'Set2']
+
+    color_df, lookup = _build_clinical_color_df(clinical_data, clinical_cols, palette_types)
+    linkage_result = linkage(sp.distance.squareform(distance_matrix), method=linkage_method)
+
+    cluster = sns.clustermap(
+        distance_matrix, cmap='mako_r', cbar_pos=CBAR_POSITION,
+        row_colors=color_df, row_linkage=linkage_result, col_linkage=linkage_result,
+    )
+
+    # Add a separate legend below the figure for each clinical column
+    legend_y = -0.05
+    for col_name in clinical_cols:
+        value_to_color = lookup[col_name]
+        patches = [
+            plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=color,
+                       markersize=10, label=label)
+            for label, color in value_to_color.items()
+        ]
+        cluster.fig.legend(
+            handles=patches, loc='lower center', bbox_to_anchor=(0.6, legend_y),
+            frameon=False, title=col_name, ncol=len(value_to_color),
+        )
+        legend_y -= 0.05
+
+    cluster.fig.suptitle(f'Cluster Map with Clinical Data of {method} with {linkage_method} linkage')
+    cluster.savefig(output_path, dpi=300, transparent=True)
 
 
-def clustermap_wClinical_legend(data, method, clinical_data, link, output_directory):
-    clinical_cols = ['PriorMalig', 'Diagnosis', 'Gender','Tx_group','VitalStatus']
-    types = ['Spectral', 'Set2', 'hls', 'muted', 'Set2']
-    color_dict = {}
+def clustermap_with_mutations(distance_matrix: np.ndarray, method: str,
+                              clinical_data: pd.DataFrame, linkage_method: str,
+                              output_path: str,
+                              mutation_cols: Optional[List[str]] = None,
+                              palette_types: Optional[List[str]] = None) -> None:
+    """Generate a clustermap annotated with mutation status and legends.
 
-    for (i, j) in zip(clinical_cols, types):
-        d = clinical_data[i]
-        color = sns.color_palette(j, n_colors=len(d.unique()))
-        lut = dict(zip(d.unique(), color))
-        row_color = d.map(lut)
-        color_dict[i] = row_color
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        method: Name of the distance metric (used in the plot title).
+        clinical_data: DataFrame with mutation columns.
+        linkage_method: Hierarchical clustering linkage method.
+        output_path: File path to save the plot.
+        mutation_cols: Mutation column names. Defaults to common AML genes.
+        palette_types: Seaborn palette names.
+    """
+    if mutation_cols is None:
+        mutation_cols = ['TP53', 'FLT3', 'NPM1', 'NRAS', 'IDH2', 'NRAS', 'KRAS']
+    if palette_types is None:
+        palette_types = ['Spectral', 'Set2', 'hls', 'muted', 'Set2', 'Spectral', 'Set2']
 
-    color_df = pd.DataFrame(color_dict)
+    color_df, lookup = _build_clinical_color_df(clinical_data, mutation_cols, palette_types)
+    linkage_result = linkage(sp.distance.squareform(distance_matrix), method=linkage_method)
 
-    linkage1 = linkage(sp.distance.squareform(data), method=link)
-    g = sns.clustermap(data, cmap='mako_r', cbar_pos=(1.1, .2, .03, .4), row_colors=color_df, 
-                       row_linkage=linkage1, col_linkage=linkage1)
+    cluster = sns.clustermap(
+        distance_matrix, cmap='mako_r', cbar_pos=CBAR_POSITION,
+        row_colors=color_df, row_linkage=linkage_result, col_linkage=linkage_result,
+    )
 
-    # Initial position for placing the legends below the clustermap
-    legend_position = (0.6, -0.05)
-    
-    # Add separated legend for each clinical data color below the main figure
-    for (i, j) in zip(clinical_cols, types):
-        d = clinical_data[i]
-        color = sns.color_palette(j, n_colors=len(d.unique()))
-        lut = dict(zip(d.unique(), color))
-        
-        # Create patches for the legend
-        patches = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=value, markersize=10, label=key) 
-                   for key, value in lut.items()]
-        
-        # Add legend with title
-        g.fig.legend(handles=patches, loc='lower center', bbox_to_anchor=legend_position,
-                     frameon=False, title=i, ncol=len(lut))
-        
-        # Adjust position for next legend
-        legend_position = (legend_position[0], legend_position[1] - 0.05)
+    legend_y = -0.05
+    for col_name in mutation_cols:
+        value_to_color = lookup[col_name]
+        patches = [
+            plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=color,
+                       markersize=10, label=label)
+            for label, color in value_to_color.items()
+        ]
+        cluster.fig.legend(
+            handles=patches, loc='lower center', bbox_to_anchor=(0.6, legend_y),
+            frameon=False, title=col_name, ncol=len(value_to_color),
+        )
+        legend_y -= 0.05
 
-    g.fig.suptitle(f'Cluster Map with Clinical Data of {method} with {link} linkage method')
-    g.savefig(output_directory, dpi=300, transparent=True)
+    cluster.fig.suptitle(f'Cluster Map with Clinical Data of {method} with {linkage_method} linkage')
+    cluster.savefig(output_path, dpi=300, transparent=True)
 
-# Note: The
 
-def clustermap_wMutations(data, method, clinical_data, link, output_directory):
-    clinical_cols = ['TP53', 'FLT3', 'NPM1','NRAS','IDH2', 'NRAS','KRAS']
-    types = ['Spectral', 'Set2', 'hls', 'muted', 'Set2','Spectral', 'Set2']
-    color_dict = {}
+# ---------------------------------------------------------------------------
+# Cluster label extraction
+# ---------------------------------------------------------------------------
 
-    for (i, j) in zip(clinical_cols, types):
-        d = clinical_data[i]
-        color = sns.color_palette(j, n_colors=len(d.unique()))
-        lut = dict(zip(d.unique(), color))
-        row_color = d.map(lut)
-        color_dict[i] = row_color
+def get_cluster_labels(distance_matrix: np.ndarray, n_clusters: int) -> np.ndarray:
+    """Assign cluster labels using Ward hierarchical clustering.
 
-    color_df = pd.DataFrame(color_dict)
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        n_clusters: Number of clusters.
 
-    linkage1 = linkage(sp.distance.squareform(data), method=link)
-    g = sns.clustermap(data, cmap='mako_r', cbar_pos=(1.1, .2, .03, .4), row_colors=color_df, 
-                       row_linkage=linkage1, col_linkage=linkage1)
-
-    # Initial position for placing the legends below the clustermap
-    legend_position = (0.6, -0.05)
-    
-    # Add separated legend for each clinical data color below the main figure
-    for (i, j) in zip(clinical_cols, types):
-        d = clinical_data[i]
-        color = sns.color_palette(j, n_colors=len(d.unique()))
-        lut = dict(zip(d.unique(), color))
-        
-        # Create patches for the legend
-        patches = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=value, markersize=10, label=key) 
-                   for key, value in lut.items()]
-        
-        # Add legend with title
-        g.fig.legend(handles=patches, loc='lower center', bbox_to_anchor=legend_position,
-                     frameon=False, title=i, ncol=len(lut))
-        
-        # Adjust position for next legend
-        legend_position = (legend_position[0], legend_position[1] - 0.05)
-
-    g.fig.suptitle(f'Cluster Map with Clinical Data of {method} with {link} linkage method')
-    g.savefig(output_directory, dpi=300, transparent=True)
-
-# Note: The
-
-def get_cluster_labels(X, n_cluster):
-
-    Z = linkage(sp.distance.squareform(X), method='ward')
-
-    cluster_labels = cut_tree(Z, n_clusters=n_cluster).flatten()
-
-    return cluster_labels
+    Returns:
+        Array of integer cluster labels for each sample.
+    """
+    linkage_result = linkage(sp.distance.squareform(distance_matrix), method='ward')
+    return cut_tree(linkage_result, n_clusters=n_clusters).flatten()

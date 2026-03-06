@@ -1,59 +1,82 @@
+"""Convert mutation trees to the MLTD text format.
+
+The MLTD algorithm expects trees in a custom text format where:
+- Lines with ``=`` map a node to its mutation labels.
+- Lines with ``:`` map a node to its children (adjacency list).
+- The root node is always labelled ``Root``.
+- The first ``:`` line defines the root and its children.
+
+Example::
+
+    Root=Label1,Label2
+    N1=Label3,Label4
+    Root:N1
+
+Files are cached on disk to avoid redundant conversions.
+"""
+
 import os
-from anytree import Node, RenderTree, PreOrderIter
-import pickle
-import pandas as pd
+from typing import List
 
-"""
-## Tree Structure
-We represent trees in the following way:
-
-```
-Root=Label1,Label2, ...
-Node1=Label3,Label4, ...
-Node2=Label5,Label6, ...
-Root:Node1,Node2
-```
-Each line of input contains either '=' or ':'. If a line contains '=', it means that left side of this sign represents a node and right side of it represents set of assigned labels to this node. If a line contains ':', it means that left side of it contains a node of the tree and right side of it contains children of that node (similar to adjacent list). First line that contains ':', represents the root node and its corresponding children. 
-
-Check t1.txt file for an example. t1.txt, t2.txt, t3.txt and t4.txt are example trees used in the paper which represent 'true tree', 'inferred tree 1', 'inferred tree 2' and 'inferred tree 3', respectively. **N.B. Do not put a blank line in the tree file.**
-"""
+from anytree import PreOrderIter
 
 current_directory = os.getcwd()
 
+# Default output directory for MLTD tree files
+MLTD_OUTPUT_DIR = os.path.join(current_directory, "AML", "aml converts", "MLTD trees")
 
-def path_mltd(tree):
-    node_lines = []
-    edge_lines = []
+
+def tree_to_mltd_string(tree) -> str:
+    """Convert an anytree mutation tree to the MLTD text format.
+
+    Args:
+        tree: An anytree root node.
+
+    Returns:
+        Multi-line string in MLTD format.
+    """
+    node_lines: List[str] = []
+    edge_lines: List[str] = []
 
     for node in PreOrderIter(tree):
-        if not isinstance(node.name, list):
-            node_labels = str(node.name)
-        else:
+        # Format mutation labels (handle single or multi-label nodes)
+        if isinstance(node.name, list):
             node_labels = ','.join(map(str, node.name))
-        
+        else:
+            node_labels = str(node.name)
+
+        # Node-to-label mapping
         if node.is_root:
             node_lines.append(f'Root={node_labels}')
         else:
             node_lines.append(f'N{node.data}={node_labels}')
 
+        # Node-to-children mapping (adjacency list)
         if not node.is_leaf:
-            if len(node.children)==1:
-                node_children = f'N{node.children[0].data}'
-            else:
-                node_children = ','.join(f'N{child.data}' for child in node.children)
+            children_str = ','.join(f'N{child.data}' for child in node.children)
             if node.is_root:
-                edge_lines.append(f'Root:{node_children}')
+                edge_lines.append(f'Root:{children_str}')
             else:
-                edge_lines.append(f'N{node.data}:{node_children}')
-   
+                edge_lines.append(f'N{node.data}:{children_str}')
+
     return '\n'.join(node_lines + edge_lines)
 
 
-def mltd_converter(tree):
-    path = current_directory + f"/AML/aml converts/MLTD trees/str_tree{tree.data}.txt"
+def mltd_converter(tree, output_dir: str = MLTD_OUTPUT_DIR) -> str:
+    """Convert an anytree mutation tree to MLTD format and cache the result.
+
+    Args:
+        tree: An anytree root node. Must have a ``data`` attribute used as
+              a unique identifier for the output filename.
+        output_dir: Directory where text files are stored.
+
+    Returns:
+        Path to the generated text file.
+    """
+    path = os.path.join(output_dir, f"str_tree{tree.data}.txt")
 
     if not os.path.exists(path):
         with open(path, 'w') as f:
-            f.write(path_mltd(tree))
+            f.write(tree_to_mltd_string(tree))
 
     return path

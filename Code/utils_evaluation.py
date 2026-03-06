@@ -1,158 +1,191 @@
-import os
-import pandas as pd
+"""Evaluation and plotting utilities for clustering and survival analysis.
+
+Mirrors the functionality of utils_survival.py — this module provides
+the same clustering evaluation functions for use in different analysis
+notebooks and scripts.
+"""
+
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import seaborn as sns
-from sklearn.metrics import silhouette_score
-from matplotlib import colors as colors
-from sklearn.metrics import silhouette_score
+import scipy.spatial as sp
 from scipy.cluster.hierarchy import linkage, cut_tree
+from sklearn.metrics import silhouette_score, silhouette_samples, calinski_harabasz_score
 from lifelines.statistics import multivariate_logrank_test, pairwise_logrank_test, logrank_test
 from lifelines import KaplanMeierFitter, CoxPHFitter
-import scipy.spatial as sp
-import io
-from contextlib import redirect_stdout
 import statsmodels.stats.multitest as multitest
-import ast
-from itertools import combinations
-from sklearn.metrics import calinski_harabasz_score as chs
-from sklearn.metrics import silhouette_samples, silhouette_score
-import copy
-import matplotlib.cm as cm
 from statsmodels.nonparametric.smoothers_lowess import lowess
+from itertools import combinations
+from typing import Dict, List, Optional, Tuple
 
 
+# ---------------------------------------------------------------------------
+# Silhouette analysis
+# ---------------------------------------------------------------------------
 
-def silhouette_plot(method, link, data, output_directory, n_max):
-    # Set the range of cluster numbers to evaluate
+def silhouette_plot(method: str, linkage_method: str, distance_matrix: np.ndarray,
+                    output_path: str, max_clusters: int) -> None:
+    """Plot silhouette scores across a range of cluster counts.
 
-    Z = linkage(sp.distance.squareform(data), method=link)
+    Args:
+        method: Name of the distance metric (used in the plot title).
+        linkage_method: Hierarchical clustering linkage method (e.g., 'ward').
+        distance_matrix: Symmetric pairwise distance matrix.
+        output_path: File path to save the plot.
+        max_clusters: Maximum number of clusters to evaluate.
+    """
+    linkage_result = linkage(sp.distance.squareform(distance_matrix), method=linkage_method)
+    scores = []
 
-    # Calculate silhouette scores for each cluster number
-    silhouette_scores = []
+    for n_clusters in range(2, max_clusters + 1):
+        labels = cut_tree(linkage_result, n_clusters=n_clusters).flatten()
+        score = silhouette_score(distance_matrix, labels, metric='precomputed')
+        scores.append(score)
 
-    for n_clusters in range(2, n_max + 1):
-
-
-        labels = cut_tree(Z, n_clusters=n_clusters).flatten()
-        score = silhouette_score(data, labels, metric='precomputed')
-        silhouette_scores.append(score)
-
-
-    line = sns.scatterplot(x=range(2, n_max + 1), y=silhouette_scores)
-    
-    line.set(title=f'Silhouette Score of {method} with {link} linkage method')
+    sns.scatterplot(x=range(2, max_clusters + 1), y=scores)
+    plt.title(f'Silhouette Score of {method} with {linkage_method} linkage')
     plt.xlabel('Number of Clusters')
     plt.ylabel('Silhouette Score')
-    plt.xticks(range(2, n_max + 1))
-    plt.savefig(output_directory,dpi= 200, transparent=True)
+    plt.xticks(range(2, max_clusters + 1))
+    plt.savefig(output_path, dpi=200, transparent=True)
     plt.clf()
 
 
+def silhouette_plot_detailed(method: str, n_clusters: int, distance_matrix: np.ndarray,
+                             output_path: str) -> None:
+    """Plot per-cluster silhouette coefficients as a detailed bar chart.
 
-def silhouette_plot_in_detail(method, n_clust, distance_matrix, output_directory):
-
-    X = distance_matrix
-
-    fig, ax1 = plt.subplots(1, 1)
+    Args:
+        method: Name of the distance metric (used in the plot title).
+        n_clusters: Number of clusters to evaluate.
+        distance_matrix: Symmetric pairwise distance matrix.
+        output_path: File path to save the plot.
+    """
+    fig, ax = plt.subplots(1, 1)
     fig.set_size_inches(7, 7)
+    ax.set_xlim([-0.1, 1])
+    ax.set_ylim([0, len(distance_matrix) + (n_clusters + 1) * 10])
 
-    ax1.set_xlim([-0.1, 1])
-
-    ax1.set_ylim([0, len(X) + (n_clust + 1) * 10])
-
-    Z = linkage(sp.distance.squareform(X), method='ward')
-
-    cluster_labels = cut_tree(Z, n_clusters=n_clust).flatten()
-
-    silhouette_avg = silhouette_score(X, cluster_labels, metric='precomputed')
-    
-    sample_silhouette_values = silhouette_samples(X, cluster_labels, metric='precomputed')
+    linkage_result = linkage(sp.distance.squareform(distance_matrix), method='ward')
+    cluster_labels = cut_tree(linkage_result, n_clusters=n_clusters).flatten()
+    avg_score = silhouette_score(distance_matrix, cluster_labels, metric='precomputed')
+    sample_scores = silhouette_samples(distance_matrix, cluster_labels, metric='precomputed')
 
     y_lower = 9
+    for cluster_idx in range(n_clusters):
+        cluster_scores = sample_scores[cluster_labels == cluster_idx]
+        cluster_scores.sort()
+        cluster_size = cluster_scores.shape[0]
+        y_upper = y_lower + cluster_size
 
-    for i in range(n_clust):
+        color = cm.nipy_spectral(float(cluster_idx) / n_clusters)
+        ax.fill_betweenx(np.arange(y_lower, y_upper), 0, cluster_scores,
+                         facecolor=color, edgecolor=color, alpha=0.7)
+        ax.text(-0.05, y_lower + 0.5 * cluster_size, str(cluster_idx))
+        y_lower = y_upper + 10
 
-        ith_cluster_silhouette_values = sample_silhouette_values[cluster_labels == i]
-
-        ith_cluster_silhouette_values.sort()
-
-        size_cluster_i = ith_cluster_silhouette_values.shape[0]
-        y_upper = y_lower + size_cluster_i
-
-        color = cm.nipy_spectral(float(i) / n_clust)
-        ax1.fill_betweenx(
-            np.arange(y_lower, y_upper),
-            0,
-            ith_cluster_silhouette_values,
-            facecolor=color,
-            edgecolor=color,
-            alpha=0.7,
-        )
-
-        ax1.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
-
-        y_lower = y_upper + 10  
-
-    ax1.set_title(f"The silhouette plot of {method} for {n_clust} clusters.")
-    ax1.set_xlabel("The silhouette coefficient values")
-    ax1.set_ylabel("Cluster label")
-
-    ax1.axvline(x=silhouette_avg, color="red", linestyle="--")
-
-    ax1.set_yticks([])  
-    ax1.set_xticks([-0.1, 0, 0.2, 0.4, 0.6, 0.8, 1])
-
-    plt.savefig(output_directory, dpi=300, bbox_inches='tight')
+    ax.set_title(f"Silhouette plot of {method} for {n_clusters} clusters")
+    ax.set_xlabel("Silhouette coefficient")
+    ax.set_ylabel("Cluster label")
+    ax.axvline(x=avg_score, color="red", linestyle="--")
+    ax.set_yticks([])
+    ax.set_xticks([-0.1, 0, 0.2, 0.4, 0.6, 0.8, 1])
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.clf()
 
 
+def weighted_silhouette(n_clusters: int, distance_matrix: np.ndarray) -> float:
+    """Compute weighted silhouette score using cluster-size-weighted medians.
 
-def weighted_silhouette(n_clust, X):
-    
-    Z = linkage(sp.distance.squareform(X), method='ward')
+    Args:
+        n_clusters: Number of clusters.
+        distance_matrix: Symmetric pairwise distance matrix.
 
-    cluster_labels = cut_tree(Z, n_clusters=n_clust).flatten()
+    Returns:
+        Weighted silhouette score.
+    """
+    linkage_result = linkage(sp.distance.squareform(distance_matrix), method='ward')
+    cluster_labels = cut_tree(linkage_result, n_clusters=n_clusters).flatten()
+    sample_scores = silhouette_samples(distance_matrix, cluster_labels, metric='precomputed')
+    total_samples = len(distance_matrix)
 
-    sample_silhouette_values = silhouette_samples(X, cluster_labels, metric='precomputed')
+    weighted_score = 0.0
+    for cluster_idx in range(n_clusters):
+        cluster_scores = sample_scores[cluster_labels == cluster_idx]
+        cluster_median = np.median(cluster_scores)
+        weighted_score += cluster_median * len(cluster_scores) / total_samples
 
-    final_silhouette = 0
-
-    for i in range(n_clust):
-        ith_cluster_silhouette_values = sample_silhouette_values[cluster_labels == i]
-        ith_cluster_silhouette_mean = np.median(ith_cluster_silhouette_values)
-        
-        weight_silhouette = ith_cluster_silhouette_mean * len(ith_cluster_silhouette_values) / len(X)
-        final_silhouette += weight_silhouette
-    
-    return final_silhouette
-
-
-
-def get_dict_surv(methods):
-    silh_surv =dict()
-    for i in methods:
-        silh_surv[i] = {'Clusters' : int, 'Weighted Silhouette Score': float, 'Calinski Harabasz Score': float, 'PH Assumptions' : str, 'Log Likelihood Ratio': float}
-    return silh_surv
+    return weighted_score
 
 
+# ---------------------------------------------------------------------------
+# Survival analysis metadata
+# ---------------------------------------------------------------------------
 
-def line_plot(function, max_x, output_directory, title, x_label, y_label, color):
-    line = sns.lineplot(x=range(2, max_x), y=function, marker='o', color=color)
-            
-    line.set(title=title)
+def get_survival_dict(methods: List[str]) -> Dict:
+    """Create an empty results dictionary for survival analysis metrics.
+
+    Args:
+        methods: List of distance metric names.
+
+    Returns:
+        Dictionary mapping each method to a template of survival metrics.
+    """
+    return {
+        method: {
+            'Clusters': int,
+            'Weighted Silhouette Score': float,
+            'Calinski Harabasz Score': float,
+            'PH Assumptions': str,
+            'Log Likelihood Ratio': float,
+        }
+        for method in methods
+    }
+
+
+# ---------------------------------------------------------------------------
+# Plotting utilities
+# ---------------------------------------------------------------------------
+
+def line_plot(values: List[float], max_x: int, output_path: str,
+              title: str, x_label: str, y_label: str, color: str) -> None:
+    """Draw and save a line plot.
+
+    Args:
+        values: Y-axis values.
+        max_x: Upper bound of x-axis range (starting from 2).
+        output_path: File path to save the plot.
+        title: Plot title.
+        x_label: X-axis label.
+        y_label: Y-axis label.
+        color: Line color.
+    """
+    sns.lineplot(x=range(2, max_x), y=values, marker='o', color=color)
+    plt.title(title)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
     plt.xticks(range(2, max_x))
-    plt.savefig(output_directory, dpi=300)
+    plt.savefig(output_path, dpi=300)
     plt.clf()
 
 
+def show_plot(values: List[float], min_x: int, max_x: int,
+              title: str, x_label: str, y_label: str, color: str) -> None:
+    """Display an interactive line plot (not saved to file).
 
-def show_plot(function, min_x, max_x, title, x_label, y_label, color):
-    line = sns.lineplot(x=range(min_x, max_x), y=function, marker='o', color=color)
-            
-    line.set(title=title)
+    Args:
+        values: Y-axis values.
+        min_x: Lower bound of x-axis range.
+        max_x: Upper bound of x-axis range.
+        title: Plot title.
+        x_label: X-axis label.
+        y_label: Y-axis label.
+        color: Line color.
+    """
+    sns.lineplot(x=range(min_x, max_x), y=values, marker='o', color=color)
+    plt.title(title)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
     plt.xticks(range(min_x, max_x))
@@ -160,348 +193,448 @@ def show_plot(function, min_x, max_x, title, x_label, y_label, color):
     plt.clf()
 
 
-def prev_cluster_increase( n_clust, X, Z, patients_silhouette = None, patients_cluster = None):
+# ---------------------------------------------------------------------------
+# Cluster quality evolution
+# ---------------------------------------------------------------------------
 
-    cluster_labels = cut_tree(Z, n_clusters=n_clust).flatten()
+def prev_cluster_increase(n_clusters: int, distance_matrix: np.ndarray,
+                          linkage_result: np.ndarray,
+                          patients_silhouette: Optional[Dict] = None,
+                          patients_cluster: Optional[Dict] = None):
+    """Compute the relative silhouette change when adding one more cluster.
 
-    sample_silhouette_values = silhouette_samples(X, cluster_labels, metric='precomputed')
+    Args:
+        n_clusters: Number of clusters.
+        distance_matrix: Symmetric pairwise distance matrix.
+        linkage_result: Precomputed linkage result.
+        patients_silhouette: Previous per-cluster weighted silhouette dict.
+        patients_cluster: Previous per-cluster size dict.
 
-    if n_clust == 2:
+    Returns:
+        For n=2: (silhouette_dict, cluster_size_dict)
+        For n>2: (relative_change, updated_silhouette_dict, updated_cluster_size_dict)
+    """
+    cluster_labels = cut_tree(linkage_result, n_clusters=n_clusters).flatten()
+    sample_scores = silhouette_samples(distance_matrix, cluster_labels, metric='precomputed')
+    total_samples = len(distance_matrix)
 
-        cluster_0_list = sample_silhouette_values[cluster_labels == 0]
-        cluster_0 = np.median(cluster_0_list)
-        cluster_0 = len(cluster_0_list) * cluster_0 / len(X)
-        cluster_1_list = sample_silhouette_values[cluster_labels == 1]
-        cluster_1 = np.median(cluster_1_list)
-        cluster_1 = len(cluster_1_list) * cluster_1 / len(X)
-        
-        patients_cluster = {cluster_labels.tolist().index(0) : len(cluster_0_list), cluster_labels.tolist().index(1) : len(cluster_1_list)}
-        patients_silhouette = {cluster_labels.tolist().index(0) : cluster_0, cluster_labels.tolist().index(1) : cluster_1}
-        
-        return patients_silhouette, patients_cluster
-        
-    else:
-        new_patients_silhouette = dict()
-        new_patients_cluster = dict()
-        rate = 0
-        prev_cluster = 0
-        others = 0
-        prev_others = 0
+    if n_clusters == 2:
+        sil_dict = {}
+        size_dict = {}
+        for cluster_idx in range(2):
+            cluster_scores = sample_scores[cluster_labels == cluster_idx]
+            representative_idx = cluster_labels.tolist().index(cluster_idx)
+            cluster_median = np.median(cluster_scores)
+            sil_dict[representative_idx] = len(cluster_scores) * cluster_median / total_samples
+            size_dict[representative_idx] = len(cluster_scores)
+        return sil_dict, size_dict
 
-        for i in range(n_clust):
-            cluster_list = sample_silhouette_values[cluster_labels == i]
-            index = cluster_labels.tolist().index(i)
-            numb = len(cluster_list)
-            new_patients_cluster[index] = numb
-            cluster = np.median(cluster_list)
-            cluster = len(cluster_list) * cluster / len(X)
-            new_patients_silhouette[index] = cluster
-            if index not in patients_cluster or numb != patients_cluster[index]:
-                
-                rate += cluster
-                
-                if index in patients_silhouette:
-                    prev_cluster = patients_silhouette[index]
-                    for j in patients_silhouette:
-                        if j != index:
-                            prev_others += patients_silhouette[j]
-            
-            else:
-                others += cluster
+    new_sil_dict = {}
+    new_size_dict = {}
+    new_cluster_total = 0.0
+    prev_cluster_sil = 0.0
+    unchanged_total = 0.0
+    prev_unchanged_total = 0.0
 
-        new_rate = rate / (others + rate)
-        
-        before = prev_cluster / (prev_others + prev_cluster)
-        
-        if new_rate > before:
-            ans = abs(new_rate - before)
+    for cluster_idx in range(n_clusters):
+        cluster_scores = sample_scores[cluster_labels == cluster_idx]
+        representative_idx = cluster_labels.tolist().index(cluster_idx)
+        cluster_size = len(cluster_scores)
+        new_size_dict[representative_idx] = cluster_size
+        cluster_weighted_sil = len(cluster_scores) * np.median(cluster_scores) / total_samples
+        new_sil_dict[representative_idx] = cluster_weighted_sil
+
+        if representative_idx not in patients_cluster or cluster_size != patients_cluster[representative_idx]:
+            new_cluster_total += cluster_weighted_sil
+            if representative_idx in patients_silhouette:
+                prev_cluster_sil = patients_silhouette[representative_idx]
+                for key in patients_silhouette:
+                    if key != representative_idx:
+                        prev_unchanged_total += patients_silhouette[key]
         else:
-            ans = -abs(before - new_rate)
-    
-        return ans, new_patients_silhouette, new_patients_cluster
-        
-            
+            unchanged_total += cluster_weighted_sil
 
-def min_cluster_increase(n_clust :  int, X, patients_cluster : list):
+    new_ratio = new_cluster_total / (unchanged_total + new_cluster_total)
+    prev_ratio = prev_cluster_sil / (prev_unchanged_total + prev_cluster_sil)
 
-    Z = linkage(sp.distance.squareform(X), method='ward')
-
-    cluster_labels = cut_tree(Z, n_clusters=n_clust).flatten()
-
-    sample_silhouette_values = silhouette_samples(X, cluster_labels, metric='precomputed')
-
-    if n_clust == 2:
-
-
-        cluster_0_list = sample_silhouette_values[cluster_labels == 0]
-        cluster_0 = np.median(cluster_0_list)
-        cluster_0 = len(cluster_0_list) * cluster_0 / len(X)
-        cluster_1_list = sample_silhouette_values[cluster_labels == 1]
-        cluster_1 = np.median(cluster_1_list)
-        cluster_1 = len(cluster_1_list) * cluster_1 / len(X)
-        
-        rate =min([cluster_0/cluster_1, cluster_1/cluster_0])
-        
-        patients_cluster = {cluster_labels.tolist().index(0) : len(cluster_0_list), cluster_labels.tolist().index(1) : len(cluster_1_list)}
-
-        
+    if new_ratio > prev_ratio:
+        change = abs(new_ratio - prev_ratio)
     else:
+        change = -abs(prev_ratio - new_ratio)
 
-        new_patients_cluster = dict()
-        rate = list()
-        others = 0
-        for i in range(n_clust):
-            cluster_list = sample_silhouette_values[cluster_labels == i]
-            index = cluster_labels.tolist().index(i)
-            numb = len(cluster_list)
-            new_patients_cluster[index] = numb
-            if index not in patients_cluster or numb != patients_cluster[index]:
-                cluster = np.median(cluster_list)
-                cluster = len(cluster_list) * cluster / len(X)
-                rate.append(cluster)
-
-            else:
-                cluster = np.median(cluster_list)
-                cluster = len(cluster_list) * cluster / len(X)
-                others += cluster
-
-        assert len(rate) == 2
-
-        rate_0 = rate[0]
-        rate[0] = rate[0] / (others + rate[1])
-        rate[1] = rate[1] / (others + rate_0)
-
-        #if rate[0] < 0:
-            #silh_rate.append(rate[1])
-        #elif rate[1] < 0:
-            #silh_rate.append(rate[0])
-        #else: 
-
-        rate = min(rate)
-
-    return rate, new_patients_cluster
+    return change, new_sil_dict, new_size_dict
 
 
-def cummulative_values(list):
-    cummulative = []
-    cummulative.append(list[0])
-    for i in range(1, len(list)):
-        cummulative.append(list[i] + cummulative[i-1])
-    return cummulative
+def min_cluster_increase(n_clusters: int, distance_matrix: np.ndarray,
+                         patients_cluster: Dict) -> Tuple[float, Dict]:
+    """Compute the minimum silhouette ratio when splitting into n clusters.
 
+    Args:
+        n_clusters: Target number of clusters.
+        distance_matrix: Symmetric pairwise distance matrix.
+        patients_cluster: Previous per-cluster size dict.
 
-def difference_dict(total_silh):
+    Returns:
+        Tuple of (minimum_ratio, updated_cluster_size_dict).
+    """
+    linkage_result = linkage(sp.distance.squareform(distance_matrix), method='ward')
+    cluster_labels = cut_tree(linkage_result, n_clusters=n_clusters).flatten()
+    sample_scores = silhouette_samples(distance_matrix, cluster_labels, metric='precomputed')
+    total_samples = len(distance_matrix)
 
-    difference = dict()
+    if n_clusters == 2:
+        scores_by_cluster = []
+        new_size_dict = {}
+        for cluster_idx in range(2):
+            cluster_scores = sample_scores[cluster_labels == cluster_idx]
+            representative_idx = cluster_labels.tolist().index(cluster_idx)
+            cluster_median = np.median(cluster_scores)
+            weighted = len(cluster_scores) * cluster_median / total_samples
+            scores_by_cluster.append(weighted)
+            new_size_dict[representative_idx] = len(cluster_scores)
+        ratio = min(scores_by_cluster[0] / scores_by_cluster[1],
+                    scores_by_cluster[1] / scores_by_cluster[0])
+        return ratio, new_size_dict
 
-    for i in total_silh.keys():
+    new_size_dict = {}
+    new_cluster_scores = []
+    unchanged_total = 0.0
 
-        if i not in difference:
-            difference[i] = list()
+    for cluster_idx in range(n_clusters):
+        cluster_scores = sample_scores[cluster_labels == cluster_idx]
+        representative_idx = cluster_labels.tolist().index(cluster_idx)
+        cluster_size = len(cluster_scores)
+        new_size_dict[representative_idx] = cluster_size
+        cluster_weighted = len(cluster_scores) * np.median(cluster_scores) / total_samples
 
-        for j in range( len(total_silh[i])-1):
-
-            if total_silh[i][j] > total_silh[i][j+1]:
-                difference[i].append(abs(total_silh[i][j]-total_silh[i][j+1]))
-            else:
-                difference[i].append(-abs(total_silh[i][j]-total_silh[i][j+1]))
-    
-    return difference
-
-def difference(silh):
-    
-    difference = list()
-
-    for i in range(len(silh)-1):
-
-        if silh[i+1] > silh[i]:
-            difference.append(abs(silh[i]-silh[i+1]))
+        if representative_idx not in patients_cluster or cluster_size != patients_cluster[representative_idx]:
+            new_cluster_scores.append(cluster_weighted)
         else:
-            difference.append(-abs(silh[i]-silh[i+1]))
-    
-    return difference
+            unchanged_total += cluster_weighted
+
+    assert len(new_cluster_scores) == 2, "Expected exactly 2 new clusters from the split"
+
+    score_0 = new_cluster_scores[0]
+    ratio_0 = new_cluster_scores[0] / (unchanged_total + new_cluster_scores[1])
+    ratio_1 = new_cluster_scores[1] / (unchanged_total + score_0)
+    ratio = min(ratio_0, ratio_1)
+
+    return ratio, new_size_dict
 
 
-def check_tree_clusters(tree_map, X, n_clust, n_trees):
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
 
-    Z = linkage(sp.distance.squareform(X), method='ward')
-    cluster_labels = cut_tree(Z, n_clusters=n_clust).flatten()
+def cumulative_values(values: List[float]) -> List[float]:
+    """Compute a cumulative sum of a list of values.
 
-    cluster_dict = {}
+    Args:
+        values: Input values.
+
+    Returns:
+        List where element i is the sum of values[0..i].
+    """
+    cumulative = [values[0]]
+    for i in range(1, len(values)):
+        cumulative.append(values[i] + cumulative[i - 1])
+    return cumulative
+
+
+def difference_dict(total_silhouettes: Dict[str, List[float]]) -> Dict[str, List[float]]:
+    """Compute signed differences between consecutive silhouette values per method.
+
+    Args:
+        total_silhouettes: Dict mapping method names to lists of silhouette scores.
+
+    Returns:
+        Dict of signed first-order differences for each method.
+    """
+    diffs = {}
+    for method_name, scores in total_silhouettes.items():
+        method_diffs = []
+        for j in range(len(scores) - 1):
+            if scores[j] > scores[j + 1]:
+                method_diffs.append(abs(scores[j] - scores[j + 1]))
+            else:
+                method_diffs.append(-abs(scores[j] - scores[j + 1]))
+        diffs[method_name] = method_diffs
+    return diffs
+
+
+def difference(silhouettes: List[float]) -> List[float]:
+    """Compute signed first-order differences of a silhouette series.
+
+    Args:
+        silhouettes: List of silhouette scores.
+
+    Returns:
+        List of signed differences (positive = improvement, negative = decline).
+    """
+    diffs = []
+    for i in range(len(silhouettes) - 1):
+        if silhouettes[i + 1] > silhouettes[i]:
+            diffs.append(abs(silhouettes[i] - silhouettes[i + 1]))
+        else:
+            diffs.append(-abs(silhouettes[i] - silhouettes[i + 1]))
+    return diffs
+
+
+def check_tree_clusters(tree_map: Dict, distance_matrix: np.ndarray,
+                        n_clusters: int, n_trees: int) -> None:
+    """Print the tree contents of each cluster for inspection.
+
+    Args:
+        tree_map: Mapping of patient IDs to trees.
+        distance_matrix: Symmetric pairwise distance matrix.
+        n_clusters: Number of clusters.
+        n_trees: Number of trees to print per cluster.
+    """
+    linkage_result = linkage(sp.distance.squareform(distance_matrix), method='ward')
+    cluster_labels = cut_tree(linkage_result, n_clusters=n_clusters).flatten()
+
+    cluster_members = {}
     for i in range(len(cluster_labels)):
-        if cluster_labels[i] not in cluster_dict:
-            cluster_dict[cluster_labels[i]] = [i+1]
+        label = cluster_labels[i]
+        if label not in cluster_members:
+            cluster_members[label] = [i + 1]
         else:
-            cluster_dict[cluster_labels[i]].append(i+1)
+            cluster_members[label].append(i + 1)
 
-    for n in range(n_clust):
-        print('Cluster ' + str(n+1) + ': \n')
+    for cluster_idx in range(n_clusters):
+        print(f'Cluster {cluster_idx + 1}:\n')
         for i in range(n_trees):
-            for j in tree_map[cluster_dict[n][i]].values():
-                print(j)
+            for value in tree_map[cluster_members[cluster_idx][i]].values():
+                print(value)
 
 
-def silhouette_except_worst(X, n_clust):
+def silhouette_except_worst(distance_matrix: np.ndarray, n_clusters: int) -> float:
+    """Compute weighted silhouette excluding the worst-performing cluster.
 
-    Z =linkage(sp.distance.squareform(X), method='ward')
-    cluster_labels = cut_tree(Z, n_clusters=n_clust).flatten()
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        n_clusters: Number of clusters.
 
-    sample_silhouette_values = silhouette_samples(X, cluster_labels, metric='precomputed')
+    Returns:
+        Sum of weighted median silhouettes after removing the worst cluster.
+    """
+    linkage_result = linkage(sp.distance.squareform(distance_matrix), method='ward')
+    cluster_labels = cut_tree(linkage_result, n_clusters=n_clusters).flatten()
+    sample_scores = silhouette_samples(distance_matrix, cluster_labels, metric='precomputed')
+    total_samples = len(distance_matrix)
 
-    silhouette_list = list()
-    for i in range(n_clust):
-        cluster_list = sample_silhouette_values[cluster_labels == i]
-        cluster = np.median(cluster_list)
-        cluster = len(cluster_list) * cluster / len(X)
-        silhouette_list.append(cluster)
-    
-    silhouette_list.sort()
-    silhouette_list.pop(0)
+    cluster_weighted_scores = []
+    for cluster_idx in range(n_clusters):
+        cluster_scores = sample_scores[cluster_labels == cluster_idx]
+        weighted = np.median(cluster_scores) * len(cluster_scores) / total_samples
+        cluster_weighted_scores.append(weighted)
 
-    return sum(silhouette_list)
-
-
-def number_patients_new_cluster(X,n_clust):
-
-    Z = linkage(sp.distance.squareform(X), method='ward')
-
-    prev_cluster_labels = cut_tree(Z, n_clusters=n_clust-1).flatten()
-
-    cluster_labels = cut_tree(Z, n_clusters=n_clust).flatten()
-    
-    values = list()
-    prev_patients_cluster = dict()
-    new_patients_cluster = dict()
-
-    for i in range(n_clust-1):
-
-        cluster_list = prev_cluster_labels[prev_cluster_labels == i]
-        index = prev_cluster_labels.tolist().index(i)
-        numb = len(cluster_list)
-        prev_patients_cluster[index] = numb
-
-    for i in range(n_clust):
-
-        cluster_list = cluster_labels[cluster_labels == i]
-        index = cluster_labels.tolist().index(i)
-        numb = len(cluster_list)
-        new_patients_cluster[index] = numb
-
-        if index not in prev_patients_cluster or numb != prev_patients_cluster[index]:
-            values.append(numb)
-
-    assert len(values) == 2
-
-    min_value = min(values)
-
-    return min_value
+    cluster_weighted_scores.sort()
+    cluster_weighted_scores.pop(0)
+    return sum(cluster_weighted_scores)
 
 
-def loess(X, method, x_min, x_max, output_dir=None):
-    x = np.array(range(x_min, x_max+1))
+def number_patients_new_cluster(distance_matrix: np.ndarray, n_clusters: int) -> int:
+    """Count patients in the smaller of the two newly formed clusters.
 
-    y = get_prev_inc_values(X, x_min, x_max)
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        n_clusters: Target number of clusters.
 
-    # Apply LOESS smoothing
+    Returns:
+        Number of patients in the smaller new cluster.
+    """
+    linkage_result = linkage(sp.distance.squareform(distance_matrix), method='ward')
+    prev_labels = cut_tree(linkage_result, n_clusters=n_clusters - 1).flatten()
+    curr_labels = cut_tree(linkage_result, n_clusters=n_clusters).flatten()
+
+    prev_sizes = {}
+    for cluster_idx in range(n_clusters - 1):
+        representative = prev_labels.tolist().index(cluster_idx)
+        prev_sizes[representative] = int(np.sum(prev_labels == cluster_idx))
+
+    new_cluster_sizes = []
+    for cluster_idx in range(n_clusters):
+        representative = curr_labels.tolist().index(cluster_idx)
+        cluster_size = int(np.sum(curr_labels == cluster_idx))
+        if representative not in prev_sizes or cluster_size != prev_sizes[representative]:
+            new_cluster_sizes.append(cluster_size)
+
+    assert len(new_cluster_sizes) == 2, "Expected exactly 2 new clusters from the split"
+    return min(new_cluster_sizes)
+
+
+# ---------------------------------------------------------------------------
+# Optimal cluster number selection (LOESS-based)
+# ---------------------------------------------------------------------------
+
+def loess_plot(distance_matrix: np.ndarray, method: str,
+               min_clusters: int, max_clusters: int,
+               output_dir: Optional[str] = None) -> None:
+    """Plot LOESS-smoothed cluster quality across cluster counts.
+
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        method: Name of the distance metric (used in the plot title).
+        min_clusters: Minimum cluster count.
+        max_clusters: Maximum cluster count.
+        output_dir: Directory to save the plot. If None, displays interactively.
+    """
+    x = np.array(range(min_clusters, max_clusters + 1))
+    y = get_prev_inc_values(distance_matrix, min_clusters, max_clusters)
     smoothed = lowess(y, x)
 
-    # Plot the smoothed curve
     plt.figure()
     plt.scatter(x, y, label='Data')
     plt.plot(smoothed[:, 0], smoothed[:, 1], 'r', label='LOESS', color='darkorange')
     plt.legend()
     plt.xlabel('Number of clusters')
     plt.ylabel('Next Cluster Relative Increase (%)')
-    plt.xticks(range(x_min, x_max+1))
+    plt.xticks(range(min_clusters, max_clusters + 1))
     plt.title(f'LOESS Smoothing for {method}')
     if output_dir is None:
         plt.show()
     else:
-        plt.savefig(output_dir + f'/{method}_loess.png', dpi=300, bbox_inches='tight')
+        plt.savefig(f'{output_dir}/{method}_loess.png', dpi=300, bbox_inches='tight')
 
-def loess_simple(X, method, x_min, x_max, output_dir=None):
-    x = np.array(range(x_min, x_max+1))
 
-    y = dif_wss(X, x_max)
+def loess_simple_plot(distance_matrix: np.ndarray, method: str,
+                      min_clusters: int, max_clusters: int,
+                      output_dir: Optional[str] = None) -> None:
+    """Plot LOESS-smoothed WSS differences across cluster counts.
 
-    # Apply LOESS smoothing
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        method: Name of the distance metric (used in the plot title).
+        min_clusters: Minimum cluster count.
+        max_clusters: Maximum cluster count.
+        output_dir: Directory to save the plot. If None, displays interactively.
+    """
+    x = np.array(range(min_clusters, max_clusters + 1))
+    y = diff_weighted_silhouette(distance_matrix, max_clusters)
     smoothed = lowess(y, x)
 
-    # Plot the smoothed curve
     plt.figure()
     plt.scatter(x, y, label='Data')
     plt.plot(smoothed[:, 0], smoothed[:, 1], 'r', label='LOESS', color='darkorange')
     plt.legend()
     plt.xlabel('Number of clusters')
     plt.ylabel('WSS difference')
-    plt.xticks(range(x_min, x_max+1))
+    plt.xticks(range(min_clusters, max_clusters + 1))
     plt.title(f'LOESS Smoothing for {method}')
     if output_dir is None:
         plt.show()
     else:
-        plt.savefig(output_dir + f'/{method}_loess.png', dpi=300, bbox_inches='tight')
+        plt.savefig(f'{output_dir}/{method}_loess.png', dpi=300, bbox_inches='tight')
 
-def n_clusters_loess(values, x_min, x_max, threshold=0.05):
-    
-    x = np.array(range(x_min, x_max+1))
 
-    y = values
+def n_clusters_loess(values: List[float], min_clusters: int, max_clusters: int,
+                     threshold: float = 0.05) -> Optional[float]:
+    """Find the first cluster count where LOESS-smoothed values stabilize.
 
-    smoothed = lowess(y, x)
-    constant_indices = np.where(np.abs(smoothed[:, 1]) < threshold)[0]
-    constant_x = smoothed[constant_indices[0], 0] if constant_indices.size > 0 else None
+    Args:
+        values: Quality metric values across cluster counts.
+        min_clusters: Minimum cluster count.
+        max_clusters: Maximum cluster count.
+        threshold: Values below this are considered stable.
 
-    return constant_x
+    Returns:
+        Cluster count where stabilization occurs, or None if not found.
+    """
+    x = np.array(range(min_clusters, max_clusters + 1))
+    smoothed = lowess(values, x)
+    stable_indices = np.where(np.abs(smoothed[:, 1]) < threshold)[0]
+    return smoothed[stable_indices[0], 0] if stable_indices.size > 0 else None
 
-def n_clusters_wss(X, min_x, max_n_clust):
-    values =[]
-    for n_clust in range(min_x, max_n_clust+1):
-        values.append(weighted_silhouette(n_clust, X))
 
-    index_max = values.index(max(values)) + min_x
-    
-    return index_max
+def n_clusters_max_silhouette(distance_matrix: np.ndarray, min_clusters: int,
+                              max_clusters: int) -> int:
+    """Find the cluster count that maximizes weighted silhouette score.
 
-def get_n_clusters(X, min_x = 3, max_x = 20, threshold = 0.05):
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        min_clusters: Minimum cluster count.
+        max_clusters: Maximum cluster count.
 
-    values = get_prev_inc_values(X, max_x = max_x)
+    Returns:
+        Optimal number of clusters.
+    """
+    scores = []
+    for n in range(min_clusters, max_clusters + 1):
+        scores.append(weighted_silhouette(n, distance_matrix))
+    return scores.index(max(scores)) + min_clusters
 
-    
-    loess_n = n_clusters_loess(values, min_x, max_x, threshold)
-    wss_n = n_clusters_wss(X, min_x, max_x)
-    out = loess_n if loess_n is not None and loess_n < wss_n else wss_n
 
-    return out
+def get_n_clusters(distance_matrix: np.ndarray, min_clusters: int = 3,
+                   max_clusters: int = 20, threshold: float = 0.05) -> float:
+    """Select optimal cluster count using LOESS stabilization or max silhouette.
 
-def get_prev_inc_values(X, min_x = 3, max_x = 20):
-    Z = linkage(sp.distance.squareform(X), method='ward')
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        min_clusters: Minimum cluster count.
+        max_clusters: Maximum cluster count.
+        threshold: LOESS stabilization threshold.
+
+    Returns:
+        Recommended number of clusters.
+    """
+    values = get_prev_inc_values(distance_matrix, max_x=max_clusters)
+    loess_n = n_clusters_loess(values, min_clusters, max_clusters, threshold)
+    sil_n = n_clusters_max_silhouette(distance_matrix, min_clusters, max_clusters)
+    return loess_n if loess_n is not None and loess_n < sil_n else sil_n
+
+
+def get_prev_inc_values(distance_matrix: np.ndarray, min_x: int = 3,
+                        max_x: int = 20) -> List[float]:
+    """Compute cluster-increase values for a range of cluster counts.
+
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        min_x: Minimum number of clusters.
+        max_x: Maximum number of clusters.
+
+    Returns:
+        List of relative silhouette change values.
+    """
+    linkage_result = linkage(sp.distance.squareform(distance_matrix), method='ward')
+    sil_dict, size_dict = prev_cluster_increase(2, distance_matrix, linkage_result)
     values = []
-    patients_silh, patients_cluster = prev_cluster_increase(2,X,Z)
-    for n_clust in range(min_x, max_x+1):
-        val, patients_silh,patients_cluster = prev_cluster_increase(n_clust,X,Z,patients_silh,patients_cluster)
-        values.append(val)
-    
+    for n in range(min_x, max_x + 1):
+        change, sil_dict, size_dict = prev_cluster_increase(
+            n, distance_matrix, linkage_result, sil_dict, size_dict
+        )
+        values.append(change)
     return values
- 
- 
-def dif_wss(X, n_clust):
 
-    silh = list()
 
-    for i in range(3, n_clust+2):
-        silh.append(weighted_silhouette(i, X))
+def diff_weighted_silhouette(distance_matrix: np.ndarray, max_clusters: int) -> List[float]:
+    """Compute first-order differences of weighted silhouette scores.
 
-    dif = difference(silh)
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        max_clusters: Maximum number of clusters.
 
-    return dif
+    Returns:
+        List of signed differences.
+    """
+    scores = [weighted_silhouette(n, distance_matrix) for n in range(3, max_clusters + 2)]
+    return difference(scores)
 
-def get_n_clusters_simple(X, min_x = 3, max_x = 20, threshold = 0.02):
 
-    values = dif_wss(X, max_x)
-    loess_n = n_clusters_loess(values, min_x, max_x, threshold)
+def get_n_clusters_simple(distance_matrix: np.ndarray, min_clusters: int = 3,
+                          max_clusters: int = 20, threshold: float = 0.02) -> float:
+    """Select optimal cluster count using simplified WSS-based LOESS method.
 
-    wss_n = n_clusters_wss(X, min_x, max_x)
+    Args:
+        distance_matrix: Symmetric pairwise distance matrix.
+        min_clusters: Minimum cluster count.
+        max_clusters: Maximum cluster count.
+        threshold: LOESS stabilization threshold.
 
-    out = loess_n if loess_n is not None and loess_n < wss_n else wss_n
-
-    return out
+    Returns:
+        Recommended number of clusters.
+    """
+    values = diff_weighted_silhouette(distance_matrix, max_clusters)
+    loess_n = n_clusters_loess(values, min_clusters, max_clusters, threshold)
+    sil_n = n_clusters_max_silhouette(distance_matrix, min_clusters, max_clusters)
+    return loess_n if loess_n is not None and loess_n < sil_n else sil_n

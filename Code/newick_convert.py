@@ -1,46 +1,72 @@
-import pandas as pd
+"""Convert mutation trees to Newick format.
+
+Newick format represents trees as nested parentheses. Multi-label nodes
+are encoded as ``{label1,label2}``. Results are cached in a pickle file
+to avoid redundant conversions.
+"""
+
 import os
 import pickle
-from tree import TreeNode
+from typing import List
+
 current_directory = os.getcwd()
 
-# do I need to include locks? if the Euler works paralelly, it might be a problem with the load and dump
+# Default path for the Newick tree cache
+NEWICK_CACHE_PATH = os.path.join(current_directory, "AML", "aml converts", "newick_trees.pickle")
 
 
-def tree_to_newick(nodes):
+def tree_to_newick(nodes: List) -> str:
+    """Recursively convert a list of tree nodes to a Newick string.
+
+    Args:
+        nodes: List of anytree nodes (typically the children of a parent).
+
+    Returns:
+        Newick-formatted string representation.
+    """
     items = []
     for node in nodes:
-        s = ''
+        subtree_str = ''
         if len(node.children) > 0:
             sub_tree = tree_to_newick(node.children)
             if sub_tree != '':
-                s += '(' + sub_tree + ')'
-        if isinstance(node.name, list):  # Check if node has multiple labels, in this case {label1,label2}
-            s += '{' + ','.join(str(label) for label in node.name) + '}'
+                subtree_str += '(' + sub_tree + ')'
+
+        # Multi-label nodes use {label1,label2} notation
+        if isinstance(node.name, list):
+            subtree_str += '{' + ','.join(str(label) for label in node.name) + '}'
         else:
-            s += str(node.name)
-        items.append(s)
+            subtree_str += str(node.name)
+
+        items.append(subtree_str)
+
     return ','.join(items)
 
-#create locks
 
-def newick_converter(tree):
+def newick_converter(tree, cache_path: str = NEWICK_CACHE_PATH) -> str:
+    """Convert an anytree mutation tree to Newick format with disk caching.
 
-    newick_trees = {}
+    Args:
+        tree: An anytree root node. Must have a ``data`` attribute used as
+              a unique cache key.
+        cache_path: Path to the pickle file used for caching conversions.
 
-    if os.path.exists(current_directory + "/AML/aml converts/newick_trees.pickle"):
-        with open(current_directory + "/AML/aml converts/newick_trees.pickle", "rb") as myfile:
-            newick_trees = pickle.load(myfile)
-    
-    if tree.data in newick_trees.keys():
-        return newick_trees[tree.data]
-    
-    else:
-        newick_trees[tree.data] = tree_to_newick([tree])
+    Returns:
+        Newick-formatted string for the tree.
+    """
+    # Load existing cache if available
+    newick_cache = {}
+    if os.path.exists(cache_path):
+        with open(cache_path, "rb") as f:
+            newick_cache = pickle.load(f)
 
-        with open(current_directory + "/AML/aml converts/newick_trees.pickle", "wb") as myfile:
-            pickle.dump(newick_trees, myfile)
+    if tree.data in newick_cache:
+        return newick_cache[tree.data]
 
-        return newick_trees[tree.data]
-    
+    # Convert and update cache
+    newick_cache[tree.data] = tree_to_newick([tree])
 
+    with open(cache_path, "wb") as f:
+        pickle.dump(newick_cache, f)
+
+    return newick_cache[tree.data]

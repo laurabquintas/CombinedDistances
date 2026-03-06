@@ -1,74 +1,90 @@
+"""DISC distance metric for comparing mutation trees.
+
+DISC (Distinctly Inherited Set Comparison) measures the distance between
+two trees by comparing the distinct ancestor sets of all ordered mutation
+pairs. For each ordered pair (i, j), it computes the Jaccard distance
+between the set of ancestors of i that are NOT ancestors of j.
+
+Supports intersection mode (only shared mutations) and union mode (all mutations).
+"""
+
 import argparse
 import pickle
+from typing import Dict, List, Set
+
 import numpy as np
 
-from CASetDISC.utils import *
-
-"""
-DISC.py calculates pairwise DISC distances between all trees in an input file with one Newick string on each line.
-Defaults to intersection distance.
-Command line arguments:
-[-o --outputFile file] [-u --union] [-p --pickle file] [-t --treePrint] [-x --minmax]
-"""
+from CASetDISC.utils import ancestor_sets, jaccard, get_newicks, get_matrix_string, get_min_max_string
 
 
-def disc(mutations, t1_ancestors, t2_ancestors):
+def disc(mutations: List[str], t1_ancestors: Dict[str, Set],
+         t2_ancestors: Dict[str, Set]) -> float:
+    """Compute the DISC distance between two trees stored as ancestor sets.
+
+    Args:
+        mutations: List of mutations over which to compute pairwise distances.
+        t1_ancestors: Dict mapping each mutation to its ancestor set in tree 1.
+        t2_ancestors: Dict mapping each mutation to its ancestor set in tree 2.
+
+    Returns:
+        Average Jaccard distance across all ordered mutation pairs.
+        Returns 1.0 if there is only one mutation.
     """
-    Compute the DISC distance between two trees stored as ancestor sets.
-    :param mutations: the set of mutations over which to sum
-    :param t1_ancestors: a dict storing the t1 ancestor sets of every mutation
-    :param t2_ancestors: a dict storing the t2 ancestor sets of every mutation
-    :return: the DISC distance between t1 and t2
-    """
-    m = len(mutations)
-    total = 0
-    
-    if m == 1:
-        return float(1)
-    
-    for i in range(m):
-        for j in range(m):
+    num_mutations = len(mutations)
+
+    if num_mutations == 1:
+        return 1.0
+
+    total = 0.0
+    for i in range(num_mutations):
+        for j in range(num_mutations):
             if i != j:
-                t1_distinct_set = t1_ancestors[mutations[i]] - t1_ancestors[mutations[j]]
-                t2_distinct_set = t2_ancestors[mutations[i]] - t2_ancestors[mutations[j]]
+                t1_distinct = t1_ancestors[mutations[i]] - t1_ancestors[mutations[j]]
+                t2_distinct = t2_ancestors[mutations[i]] - t2_ancestors[mutations[j]]
+                total += jaccard(t1_distinct, t2_distinct)
 
-                total += jaccard(t1_distinct_set, t2_distinct_set)
-
-    return total / (m * (m - 1))
-
-
-def disc_intersection(t1, t2):
-    """
-    Compute the DISC distance between two trees, only summing over pairs of mutations in both trees.
-    :param t1: a Newick string representation of tree 1
-    :param t2: a Newick string representation of tree 2
-    :return: the DISC intersection distance between tree 1 and tree 2
-    """
-    t1_ancestors = ancestor_sets(t1)
-    t2_ancestors = ancestor_sets(t2)
-    intersection = list(set(t1_ancestors.keys()) & set(t2_ancestors.keys()))
-
-    return disc(intersection, t1_ancestors, t2_ancestors)
+    return total / (num_mutations * (num_mutations - 1))
 
 
-def disc_union(t1, t2):
-    """
-    Compute the DISC distance between two trees, summing over all pairs of mutations.
-    :param t1: a Newick string representation of tree 1
-    :param t2: a Newick string representation of tree 2
-    :return: the DISC union distance between tree 1 and tree 2
+def disc_intersection(t1: str, t2: str) -> float:
+    """Compute DISC distance using only mutations present in both trees.
+
+    Args:
+        t1: Newick string representation of tree 1.
+        t2: Newick string representation of tree 2.
+
+    Returns:
+        DISC intersection distance.
     """
     t1_ancestors = ancestor_sets(t1)
     t2_ancestors = ancestor_sets(t2)
-    union = list(set(t1_ancestors.keys()) | set(t2_ancestors.keys()))
+    shared_mutations = list(set(t1_ancestors.keys()) & set(t2_ancestors.keys()))
+    return disc(shared_mutations, t1_ancestors, t2_ancestors)
 
-    for u in union:
-        if u not in t1_ancestors:
-            t1_ancestors[u] = set()
-        if u not in t2_ancestors:
-            t2_ancestors[u] = set()
 
-    return disc(union, t1_ancestors, t2_ancestors)
+def disc_union(t1: str, t2: str) -> float:
+    """Compute DISC distance using all mutations from both trees.
+
+    Mutations absent from a tree are assigned an empty ancestor set.
+
+    Args:
+        t1: Newick string representation of tree 1.
+        t2: Newick string representation of tree 2.
+
+    Returns:
+        DISC union distance.
+    """
+    t1_ancestors = ancestor_sets(t1)
+    t2_ancestors = ancestor_sets(t2)
+    all_mutations = list(set(t1_ancestors.keys()) | set(t2_ancestors.keys()))
+
+    for mutation in all_mutations:
+        if mutation not in t1_ancestors:
+            t1_ancestors[mutation] = set()
+        if mutation not in t2_ancestors:
+            t2_ancestors[mutation] = set()
+
+    return disc(all_mutations, t1_ancestors, t2_ancestors)
 
 
 if __name__ == '__main__':
@@ -88,7 +104,7 @@ if __name__ == '__main__':
             print(tree)
 
     distance_measure = disc_union if args.union else disc_intersection
-    distance_matrix = [[None for x in range(len(trees))] for y in range(len(trees))]
+    distance_matrix = [[None for _ in range(len(trees))] for _ in range(len(trees))]
     for i, t1 in enumerate(trees):
         for j, t2 in enumerate(trees):
             distance_matrix[i][j] = distance_measure(t1, t2)

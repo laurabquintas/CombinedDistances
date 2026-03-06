@@ -1,30 +1,39 @@
+"""Multi-Labeled Tree Distance (MLTD) metric.
+
+Computes similarity between two mutation trees using the MLTD algorithm
+via a compiled C++ binary. The binary reads two tree files in MLTD text
+format and outputs the similarity score.
+"""
+
 import os
 import subprocess
 
 current_directory = os.getcwd()
 
-def calculate_mltd(path_tree1, path_tree2):
-    """
-    This function calculates the similarity between two trees using the MLTD algorithm.
+# Path to the compiled MLTD binary
+MLTD_BINARY = os.path.join(current_directory, "MLTD", "main")
 
-    Parameters:
-    path_tree1 (str): The file path to the first tree.
-    path_tree2 (str): The file path to the second tree.
+
+def calculate_mltd(path_tree1: str, path_tree2: str,
+                   binary_path: str = MLTD_BINARY) -> float:
+    """Compute the MLTD similarity between two trees.
+
+    Calls the MLTD C++ binary as a subprocess and parses the similarity
+    score from its stdout output.
+
+    Args:
+        path_tree1: File path to the first tree in MLTD text format.
+        path_tree2: File path to the second tree in MLTD text format.
+        binary_path: Path to the compiled MLTD binary.
 
     Returns:
-    float: The similarity score between the two trees.
-
+        Similarity score in [0, 1], where 1 means identical trees.
     """
-    # Construct the arguments for the command to be run in the subprocess
-    args = [current_directory + "/MLTD/main", path_tree1, path_tree2]
-    
-    # Run the command, capturing the output and converting it to text
+    args = [binary_path, path_tree1, path_tree2]
     result = subprocess.run(args, capture_output=True, text=True)
-    
-    # Process the output, which is expected to be multiple lines of text
+
+    # The last line of output contains the similarity score as the last word
     output_lines = result.stdout.strip().split("\n")
-    
-    # The last line contains the similarity score, which is the last word on the line
     similarity = float(output_lines[-1].split()[-1])
-    
+
     return similarity
