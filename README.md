@@ -1,5 +1,8 @@
 ## Predictive Power of Distance Metrics for Cancer Patient Survival
 
+> **Presented at ETH-DBSSE** (Computational Biology Group)
+> and **EMBL Heidelberg** (OLISSIPO Annual Meeting)
+
 ### Overview
 
 This project explored the predictive potential of distance metrics applied to mutation trees in cancer genomics. By analyzing the evolutionary pathways of tumors, we investigated whether these metrics—individually or in combination—can improve prognostic predictions beyond traditional genotype and clinical data.
@@ -12,10 +15,3 @@ Cancer is characterized by uncontrolled cell growth and genetic mutations, leadi
 
 This study assesses the ability of distance metrics to predict patient survival in Acute Myeloid Leukemia and Breast Cancer. The primary goal was to determine whether these metrics—alone or combined—enhance prognostic predictions and validate their association with clinical outcomes. Using real-world datasets, we optimized metric combinations through survival data analysis, comparing stratification models based on tree-derived information with those relying solely on genotype and clinical data. The findings aimed to contribute to advancing individualized cancer treatment strategies.
 
-### Presentations
-
-The work was presented at multiple venues, including:
-
-- A group meeting at ETH-DBSSE within the computational biology group;
-
-- The OLISSIPO annual meeting, with a seminar at EMBL in Heidelberg.
