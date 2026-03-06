@@ -15,3 +15,69 @@ Cancer is characterized by uncontrolled cell growth and genetic mutations, leadi
 
 This study assesses the ability of distance metrics to predict patient survival in Acute Myeloid Leukemia and Breast Cancer. The primary goal was to determine whether these metrics—alone or combined—enhance prognostic predictions and validate their association with clinical outcomes. Using real-world datasets, we optimized metric combinations through survival data analysis, comparing stratification models based on tree-derived information with those relying solely on genotype and clinical data. The findings aimed to contribute to advancing individualized cancer treatment strategies.
 
+### Distance Metrics
+
+The pipeline computes pairwise distance matrices between patient mutation trees using 16 metric variants across 5 families:
+
+| Family | Metrics | Source |
+|--------|---------|--------|
+| **Bourque Distance (BD)** | BD, 1BD, 2BD | Bourque et al. |
+| **MP3** | MP3 (union, intersection, geometric, sigmoid) | Ciccolella et al. |
+| **CASet / DISC** | CASet (intersection, union), DISC (intersection, union) | DiNardo et al. |
+| **MLTD** | MLTD | Karpov et al. |
+| **GraPhyC** | PD, PCD, AD, CD | Govek et al. |
+
+Metric combinations are optimized using **differential evolution** and weighted distance matrices are evaluated via hierarchical clustering (Ward linkage), silhouette analysis, and survival modeling (Kaplan-Meier, Cox PH, log-rank tests, group LASSO).
+
+### Datasets
+
+- **Acute Myeloid Leukemia (AML)** — mutation trees reconstructed from patient tumor samples
+- **Breast Cancer** — mutation trees from breast cancer patient cohorts
+
+### Project Structure
+
+```
+CombinedDistances/
+├── README.md
+├── requirements.txt
+├── Code/
+│   ├── distance_wrapper.py      # Unified interface to all 16 distance metrics
+│   ├── distance_matrix.py       # Pairwise distance matrix computation
+│   ├── diff_ev_trial_gen.py     # Cluster visualization and export
+│   ├── utils_survival.py        # Survival analysis utilities (silhouette, clustering)
+│   ├── utils_evaluation.py      # Evaluation and plotting functions
+│   ├── utils_clustering.py      # Clustering utilities
+│   ├── tree.py                  # Tree data structures
+│   ├── dot_convert.py           # DOT format converter
+│   ├── mltd_convert.py          # MLTD format converter
+│   ├── newick_convert.py        # Newick format converter
+│   ├── read_json.py             # JSON tree reader
+│   ├── diff_final.sh            # Differential evolution runner
+│   ├── Survival_R.R             # Group LASSO survival models (R)
+│   ├── AML_final_results.ipynb                      # AML results notebook
+│   ├── Individual_survival_pipeline_aml_gen.ipynb    # AML survival pipeline
+│   └── Metrics/                 # Distance metric implementations
+│       ├── BD/                  # Bourque Distance
+│       ├── CASetDISC/           # CASet and DISC
+│       ├── GraPhyC/             # PD, PCD, AD, CD
+│       ├── MLTD/                # Multi-Labeled Tree Distance
+│       └── MP3/                 # MP3 Tree Similarity
+└── Documents/
+    ├── MScThesisLauraQuintas.pdf
+    └── Extended_Abstract_LauraQuintas.pdf
+```
+
+### How to Run
+
+```bash
+pip install -r requirements.txt
+```
+
+The R survival analysis (`Survival_R.R`) additionally requires: `survival`, `survminer`, `glmnet`, `grpreg`, `penalized`, `gglasso`.
+
+The main analysis workflows are in the Jupyter notebooks under `Code/`. Start with `AML_final_results.ipynb` for the full AML analysis, or `Individual_survival_pipeline_aml_gen.ipynb` for the step-by-step survival pipeline.
+
+### Documents
+
+- [**MSc Thesis**](Documents/MScThesisLauraQuintas.pdf) — full thesis document
+- [**Extended Abstract**](Documents/Extended_Abstract_LauraQuintas.pdf) — conference abstract
