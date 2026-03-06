@@ -5,7 +5,7 @@
 
 ### Overview
 
-This project explored the predictive potential of distance metrics applied to mutation trees in cancer genomics. By analyzing the evolutionary pathways of tumors, we investigated whether these metrics—individually or in combination—can improve prognostic predictions beyond traditional genotype and clinical data.
+This project explored the predictive potential of distance metrics applied to mutation trees in cancer genomics. By analyzing the evolutionary pathways of tumors, we investigated whether these metrics, individually or in combination, can improve prognostic predictions beyond traditional genotype and clinical data.
 
 ### Motivation
 
@@ -31,7 +31,7 @@ Metric combinations are optimized using **differential evolution** and weighted 
 
 ### Datasets
 
-- **Acute Myeloid Leukemia (AML)** — mutation trees reconstructed from patient tumor samples
+- **Acute Myeloid Leukemia (AML)** — mutation trees reconstructed from patient tumor samples, this project shows only the code relating to this dataset.
 - **Breast Cancer** — mutation trees from breast cancer patient cohorts
 
 ### Project Structure
